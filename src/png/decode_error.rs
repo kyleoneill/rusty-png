@@ -12,6 +12,10 @@ pub enum DecodeError {
     InvalidSignature(),
     #[error("The PNG file has an invalid file structure")]
     InvalidStructure(),
+    #[error("Unsupported Feature: {0}")]
+    UnsupportedFeature(String),
+    #[error("A chunk checksum has failed validation")]
+    FailedChecksum(),
     #[error("The PNG header is invalid, it should be 25 bytes long and have the chunk type of 'IHDR'")]
     InvalidHeader()
 }

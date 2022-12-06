@@ -10,7 +10,7 @@ fn main() {
         panic!("You need to provide the path of a png to read.");
     }
     match PNG::from_file_path(&args[1]) {
-        Ok(image) => image.show(),
+        Ok(mut image) => image.show(),
         Err(error) => panic!("{}", error)
     }
 }

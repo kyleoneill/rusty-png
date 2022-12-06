@@ -1,6 +1,8 @@
 use crate::png::decode_error::DecodeError;
 use crate::png::decode_error::DecodeError::*;
 use crate::png::ImageMetadata;
+use crc32fast::{hash, Hasher};
+use winit::event::VirtualKeyCode::P;
 
 pub struct ChunkReader {
     position: usize,
@@ -63,9 +65,15 @@ impl ChunkReader {
             let length = self.read_four_bytes_into_u32();
             let chunk_type = ChunkType::from_bytes(self.read_four_bytes_into_array());
             let chunk_data = self.read_chunk_data(&length);
-            // TODO: I should actually do something with the crc, like verify the chunk with it
             let crc = self.read_four_bytes_into_u32();
             let chunk = Chunk { length, chunk_type, chunk_data, crc };
+            // TODO: Need to support PLTE chunks
+            if chunk.chunk_type == ChunkType::PLTE {
+                return Err(UnsupportedFeature("PLTE chunks are not yet supported".to_owned()));
+            }
+            if !chunk.crc_is_valid() {
+                return Err(FailedChecksum());
+            }
             if chunk.chunk_type != ChunkType::IEND {
                 chunks.push(chunk);
             }
@@ -116,12 +124,15 @@ impl ChunkType {
             // still need to read the chunk so our file read continues correctly
             _ => Self::Unknown
         }
-        // match as_num {
-        //     1229472850 => Ok(Self::IHDR),
-        //     1229209940 => Ok(Self::IDAT),
-        //     1229278788 => Ok(Self::IEND),
-        //     _ => Err(UnsupportedChunkType(as_num))
-        // }
+    }
+    pub fn to_bytes(&self) -> &[u8; 4] {
+        match self {
+            Self::IHDR => b"IHDR",
+            Self::IDAT => b"IDAT",
+            Self::IEND => b"IEND",
+            Self::PLTE => b"PLTE",
+            _ => b"aaaa"
+        }
     }
 }
 
@@ -141,3 +152,18 @@ pub struct Chunk {
 //     pub chunk_data:Cow<'a, [u8]>, // &'a [u8] when borrowed, Vec<u8> when owned
 //     pub crc: u32,
 // }
+
+impl Chunk {
+    fn crc_is_valid(&self) -> bool {
+        // CRC is calculated on the chunk type and chunk data but NOT the length field
+        // This could be made more efficient, like verifying the CRC while constructing the chunk.
+        // I shouldn't be converting [u8; 4] into a ChunkType and then back into a [u8; 4]
+        let mut hasher = Hasher::new();
+        let chunk_type = self.chunk_type.to_bytes().clone();
+        //let data_to_checksum = chunk_type + self.chunk_data.clone();
+        hasher.update(&chunk_type);
+        hasher.update(&self.chunk_data[..]);
+        let checksum = hasher.finalize();
+        checksum == self.crc
+    }
+}
