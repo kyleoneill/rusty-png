@@ -11,5 +11,7 @@ pub enum DecodeError {
     #[error("PNG file has an invalid signature")]
     InvalidSignature(),
     #[error("The PNG file has an invalid file structure")]
-    InvalidStructure()
+    InvalidStructure(),
+    #[error("The PNG header is invalid, it should be 25 bytes long but it was not")]
+    InvalidHeader()
 }

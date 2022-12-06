@@ -9,12 +9,7 @@ pub struct ChunkReader {
 }
 
 impl ChunkReader {
-    fn signature_is_valid(signature: &[u8]) -> bool {
-        let valid_signature: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
-        return valid_signature == *signature
-    }
-
-    pub fn new(bytes: Vec<u8>) -> Result<Self, DecodeError> {
+    fn validate_file(bytes: &Vec<u8>) -> Result<(), DecodeError> {
         // A valid PNG is a minimum of 57 bytes. This covers the signature, which is 8 bytes,
         // an IHDR header chunk, which is 25 bytes (13 bytes of data), at least one IDAT chunk, and
         // an IEND chunk. Chunks are a minimum of 12 bytes; 4 for data length, 4 for type, and
@@ -22,9 +17,19 @@ impl ChunkReader {
         if bytes.len() < 57 {
             return Err(InvalidStructure())
         }
-        if !Self::signature_is_valid(&bytes[0..8]) {
+        let valid_signature: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+        if valid_signature != bytes[0..8] {
             return Err(InvalidSignature())
         }
+        let valid_length: [u8; 4] = [0, 0, 0, 13];
+        if valid_length != bytes[8..12] {
+            return Err(InvalidHeader())
+        }
+        Ok(())
+    }
+
+    pub fn new(bytes: Vec<u8>) -> Result<Self, DecodeError> {
+        Self::validate_file(&bytes)?;
         // Initialize to position 33, the first byte after the signature and IHDR chunk
         Ok(ChunkReader { position: 33, bytes })
     }
