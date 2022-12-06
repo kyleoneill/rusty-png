@@ -24,14 +24,14 @@ impl PNG {
                 let mut file_contents: Vec<u8> = Vec::new();
                 match file.read_to_end(&mut file_contents) {
                     Ok(_file_size) => (),
-                    Err(e) => return Err(FailedToReadFile(fp.to_owned()))
+                    Err(_e) => return Err(FailedToReadFile(fp.to_owned()))
                 }
                 let mut reader = ChunkReader::new(file_contents)?;
                 let mut chunks: Vec<Chunk> = Vec::new();
                 reader.read_into_vec(&mut chunks)?;
                 Ok(Self {chunks})
             }
-            Err(e) => Err(FailedToOpenFile(fp.to_owned()))
+            Err(_e) => Err(FailedToOpenFile(fp.to_owned()))
         }
     }
 
