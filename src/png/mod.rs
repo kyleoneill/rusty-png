@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::fs::File;
 use std::io::Read;
+use std::fmt;
+use std::fmt::Formatter;
 
 mod decode_error;
 use decode_error::DecodeError;
@@ -9,6 +11,7 @@ use decode_error::DecodeError::*;
 mod chunk;
 use chunk::{Chunk, ChunkReader};
 
+#[derive(Debug)]
 pub struct ImageMetadata {
     width: u32,
     height: u32,
@@ -22,6 +25,15 @@ pub struct ImageMetadata {
 pub struct PNG {
     chunks: Vec<Chunk>,
     metadata: ImageMetadata
+}
+
+impl fmt::Debug for PNG {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PNG")
+            .field("metadata", &self.metadata)
+            .field("chunk_length", &self.chunks.len())
+            .finish()
+    }
 }
 
 impl PNG {
@@ -48,7 +60,8 @@ impl PNG {
     }
 
     pub fn show(&self) {
-        println!("PNG contains {0} chunk(s)", self.chunks.len());
-        println!("Resolution is {0}x{1}", self.metadata.width, self.metadata.height);
+        // println!("PNG contains {0} chunk(s)", self.chunks.len());
+        // println!("Resolution is {0}x{1}", self.metadata.width, self.metadata.height);
+        println!("{:?}", self);
     }
 }

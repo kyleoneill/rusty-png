@@ -1,4 +1,3 @@
-use crate::png::chunk::ChunkType::IEND;
 use crate::png::decode_error::DecodeError;
 use crate::png::decode_error::DecodeError::*;
 use crate::png::ImageMetadata;
@@ -21,8 +20,11 @@ impl ChunkReader {
         if valid_signature != bytes[0..8] {
             return Err(InvalidSignature())
         }
+        // The first chunk of every PNG must be the header. The header's first 8 bytes must
+        // display that the data section is 13 bytes long and that the header type is b"IHDR"
         let valid_length: [u8; 4] = [0, 0, 0, 13];
-        if valid_length != bytes[8..12] {
+        let valid_first_chunk_type = b"IHDR";
+        if valid_length != bytes[8..12] || *valid_first_chunk_type != bytes[12..16] {
             return Err(InvalidHeader())
         }
         Ok(())
@@ -64,7 +66,7 @@ impl ChunkReader {
             // TODO: I should actually do something with the crc, like verify the chunk with it
             let crc = self.read_four_bytes_into_u32();
             let chunk = Chunk { length, chunk_type, chunk_data, crc };
-            if chunk.chunk_type != IEND {
+            if chunk.chunk_type != ChunkType::IEND {
                 chunks.push(chunk);
             }
         }
@@ -99,6 +101,7 @@ pub enum ChunkType {
     IHDR,
     IDAT,
     IEND,
+    PLTE,
     Unknown
 }
 
@@ -108,6 +111,7 @@ impl ChunkType {
             b"IHDR" => Self::IHDR,
             b"IDAT" => Self::IDAT,
             b"IEND" => Self::IEND,
+            b"PLTE" => Self::PLTE,
             // If a chunk type is unknown, we want to ignore the type. We don't need to error but we
             // still need to read the chunk so our file read continues correctly
             _ => Self::Unknown
