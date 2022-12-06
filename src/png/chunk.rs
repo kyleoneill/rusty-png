@@ -63,18 +63,18 @@ impl ChunkReader {
     pub fn read_into_vec(&mut self, chunks: &mut Vec<Chunk>) -> Result<(), DecodeError> {
         while self.position < self.bytes.len() {
             let length = self.read_four_bytes_into_u32();
-            let chunk_type = ChunkType::from_bytes(self.read_four_bytes_into_array());
+            let chunk_type = self.read_four_bytes_into_array();
             let chunk_data = self.read_chunk_data(&length);
             let crc = self.read_four_bytes_into_u32();
             let chunk = Chunk { length, chunk_type, chunk_data, crc };
             // TODO: Need to support PLTE chunks
-            if chunk.chunk_type == ChunkType::PLTE {
+            if chunk.chunk_type == b"PLTE".to_owned() {
                 return Err(UnsupportedFeature("PLTE chunks are not yet supported".to_owned()));
             }
             if !chunk.crc_is_valid() {
                 return Err(FailedChecksum());
             }
-            if chunk.chunk_type != ChunkType::IEND {
+            if chunk.chunk_type != b"IEND".to_owned() {
                 chunks.push(chunk);
             }
         }
@@ -101,54 +101,19 @@ impl ChunkReader {
     }
 }
 
-/// IHDR, IDAT, and IEND are the only supported chunk types. These represent the mandatory types,
-/// the rest are optional. The first chunk must be an IHDR, there must be at least one IDAT, and
-/// the final chunk must be an IEND.
-#[derive(Debug, PartialEq)]
-pub enum ChunkType {
-    IHDR,
-    IDAT,
-    IEND,
-    PLTE,
-    Unknown
-}
-
-impl ChunkType {
-    pub fn from_bytes(bytes: [u8; 4]) -> Self {
-        match &bytes {
-            b"IHDR" => Self::IHDR,
-            b"IDAT" => Self::IDAT,
-            b"IEND" => Self::IEND,
-            b"PLTE" => Self::PLTE,
-            // If a chunk type is unknown, we want to ignore the type. We don't need to error but we
-            // still need to read the chunk so our file read continues correctly
-            _ => Self::Unknown
-        }
-    }
-    pub fn to_bytes(&self) -> &[u8; 4] {
-        match self {
-            Self::IHDR => b"IHDR",
-            Self::IDAT => b"IDAT",
-            Self::IEND => b"IEND",
-            Self::PLTE => b"PLTE",
-            _ => b"aaaa"
-        }
-    }
-}
-
 /// A chunk is made of 4 constituent parts. It begins with an unsigned 4 byte length (the length
 /// of the data section, not the entire chunks length), then the chunk's type, the chunk data, and
 /// a CRC.
 pub struct Chunk {
     pub length: u32,
-    pub chunk_type: ChunkType,
+    pub chunk_type: [u8; 4],
     pub chunk_data: Vec<u8>,
     pub crc: u32
 }
 
 // pub struct Chunk<'a> {
 //     pub length: u32,
-//     pub chunk_type: ChunkType,
+//     pub chunk_type: [u8; 4],
 //     pub chunk_data:Cow<'a, [u8]>, // &'a [u8] when borrowed, Vec<u8> when owned
 //     pub crc: u32,
 // }
@@ -156,12 +121,8 @@ pub struct Chunk {
 impl Chunk {
     fn crc_is_valid(&self) -> bool {
         // CRC is calculated on the chunk type and chunk data but NOT the length field
-        // This could be made more efficient, like verifying the CRC while constructing the chunk.
-        // I shouldn't be converting [u8; 4] into a ChunkType and then back into a [u8; 4]
         let mut hasher = Hasher::new();
-        let chunk_type = self.chunk_type.to_bytes().clone();
-        //let data_to_checksum = chunk_type + self.chunk_data.clone();
-        hasher.update(&chunk_type);
+        hasher.update(&self.chunk_type);
         hasher.update(&self.chunk_data[..]);
         let checksum = hasher.finalize();
         checksum == self.crc
