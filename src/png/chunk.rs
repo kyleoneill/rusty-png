@@ -1,8 +1,7 @@
 use crate::png::decode_error::DecodeError;
 use crate::png::decode_error::DecodeError::*;
 use crate::png::ImageMetadata;
-use crc32fast::{hash, Hasher};
-use winit::event::VirtualKeyCode::P;
+use crc32fast::Hasher;
 
 pub struct ChunkReader {
     position: usize,
@@ -24,9 +23,7 @@ impl ChunkReader {
         }
         // The first chunk of every PNG must be the header. The header's first 8 bytes must
         // display that the data section is 13 bytes long and that the header type is b"IHDR"
-        let valid_length: [u8; 4] = [0, 0, 0, 13];
-        let valid_first_chunk_type = b"IHDR";
-        if valid_length != bytes[8..12] || *valid_first_chunk_type != bytes[12..16] {
+        if bytes[8..12] != [0, 0, 0, 13] || bytes[12..16] != b"IHDR".to_owned() {
             return Err(InvalidHeader())
         }
         Ok(())

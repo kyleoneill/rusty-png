@@ -78,7 +78,7 @@ impl PNG {
         // storing the compressed data-stream twice and then the compressed data-stream once and
         // the uncompressed once) if we copy chunk.chunk_data or empties all chunk chunk_data fields
         let mut data: Vec<u8> = Vec::new();
-        for mut chunk in &mut self.chunks {
+        for chunk in &mut self.chunks {
             data.append(&mut chunk.chunk_data);
         }
         data
