@@ -1,9 +1,11 @@
+use std::borrow::Borrow;
 use std::path::Path;
 use std::fs::File;
 use std::io::Read;
 use std::fmt;
 use std::fmt::Formatter;
 
+use inflate::inflate_bytes_zlib;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -59,7 +61,7 @@ impl PNG {
                 let mut reader = ChunkReader::new(file_contents)?;
                 let mut chunks: Vec<Chunk> = Vec::new();
                 reader.read_into_vec(&mut chunks)?;
-                let metadata = reader.read_metadata();
+                let metadata = reader.read_metadata()?;
                 // TODO: I should not be unwrapping
                 let name = file_path.file_stem().unwrap().to_str().unwrap().to_owned();
                 Ok(Self {chunks, metadata, name })
@@ -68,7 +70,7 @@ impl PNG {
         }
     }
 
-    fn get_chunk_data(&mut self) -> Vec<u8> {
+    fn get_decoded_chunk_data(&mut self) -> Result<Vec<u8>, DecodeError> {
         // TODO: I think that I should be storing the IDAT data in the PNG struct rather than chunks
         // Chunks might only be meant to be used to read data during transfer/decoding, not as a
         // storage mechanism. Will have to see how other chunks, like PLTE, affect the rendering
@@ -81,12 +83,19 @@ impl PNG {
         for chunk in &mut self.chunks {
             data.append(&mut chunk.chunk_data);
         }
-        data
+        // inflate_bytes_zlib_no_checksum(&data[..])
+        match inflate_bytes_zlib(&data[..]) {
+            Ok(decoded) => Ok(decoded),
+            Err(e) => {
+                eprintln!("Failed to inflate compressed data with error: {}", e.as_str());
+                Err(FailedDecoding())
+            }
+        }
     }
 
-    pub fn show(&mut self) {
+    pub fn show(&mut self) -> Result<(), DecodeError> {
         println!("Displaying image with data:\n{:?}", self);
-        let render_data = self.get_chunk_data();
+        let render_data = self.get_decoded_chunk_data()?;
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
             .with_title(&self.name)

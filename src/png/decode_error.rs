@@ -16,6 +16,8 @@ pub enum DecodeError {
     UnsupportedFeature(String),
     #[error("A chunk checksum has failed validation")]
     FailedChecksum(),
+    #[error("Failed to decode PNG data")]
+    FailedDecoding(),
     #[error("The PNG header is invalid, it should be 25 bytes long and have the chunk type of 'IHDR'")]
     InvalidHeader()
 }

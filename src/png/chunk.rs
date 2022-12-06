@@ -78,7 +78,7 @@ impl ChunkReader {
         Ok(())
     }
 
-    pub fn read_metadata(&self) -> ImageMetadata {
+    pub fn read_metadata(&self) -> Result<ImageMetadata, DecodeError> {
         // IHDR begin at position 8 and end at 33 (non-inclusive)
         // This means that IHDR's data begins at 16 and ends at 29 (non-inclusive)
         let mut buf = [0u8; 4];
@@ -86,7 +86,11 @@ impl ChunkReader {
         let width = u32::from_be_bytes(buf);
         buf.clone_from_slice(&self.bytes[20..24]);
         let height = u32::from_be_bytes(buf);
-        ImageMetadata {
+        // TODO: Support interlacing: http://www.libpng.org/pub/png/spec/1.2/PNG-DataRep.html#DR.Interlaced-data-order
+        if self.bytes[28] != 0 {
+            return Err(UnsupportedFeature("Interlacing is not yet supported".to_owned()));
+        }
+        Ok(ImageMetadata {
             width,
             height,
             bit_depth: self.bytes[24].clone(),
@@ -94,7 +98,7 @@ impl ChunkReader {
             compression_method: self.bytes[26].clone(),
             filter_method: self.bytes[27].clone(),
             interlace_method: self.bytes[28].clone()
-        }
+        })
     }
 }
 
