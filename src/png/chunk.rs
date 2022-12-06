@@ -1,5 +1,7 @@
+use crate::png::chunk::ChunkType::IEND;
 use crate::png::decode_error::DecodeError;
 use crate::png::decode_error::DecodeError::*;
+use crate::png::ImageMetadata;
 
 pub struct ChunkReader {
     position: usize,
@@ -13,17 +15,18 @@ impl ChunkReader {
     }
 
     pub fn new(bytes: Vec<u8>) -> Result<Self, DecodeError> {
-        // A valid PNG is a minimum of 44 bytes. This covers the signature, which is 8 bytes,
-        // and 3 chunks. A chunk is a minimum of 12 bytes (length, type, CRC at 4 bytes each. The
-        // data section can be empty). A PNG must have a minimum of 3 chunks, an IHDR, an IDAT, and
-        // an IEND
-        if bytes.len() < 44 {
+        // A valid PNG is a minimum of 57 bytes. This covers the signature, which is 8 bytes,
+        // an IHDR header chunk, which is 25 bytes (13 bytes of data), at least one IDAT chunk, and
+        // an IEND chunk. Chunks are a minimum of 12 bytes; 4 for data length, 4 for type, and
+        // 4 for a CRC. The data section can be empty)
+        if bytes.len() < 57 {
             return Err(InvalidStructure())
         }
         if !Self::signature_is_valid(&bytes[0..8]) {
             return Err(InvalidSignature())
         }
-        Ok(ChunkReader { position: 8, bytes })
+        // Initialize to position 33, the first byte after the signature and IHDR chunk
+        Ok(ChunkReader { position: 33, bytes })
     }
 
     fn read_four_bytes_into_u32(&mut self) -> u32 {
@@ -56,15 +59,37 @@ impl ChunkReader {
             // TODO: I should actually do something with the crc, like verify the chunk with it
             let crc = self.read_four_bytes_into_u32();
             let chunk = Chunk { length, chunk_type, chunk_data, crc };
-            chunks.push(chunk);
+            if chunk.chunk_type != IEND {
+                chunks.push(chunk);
+            }
         }
         Ok(())
+    }
+
+    pub fn read_metadata(&self) -> ImageMetadata {
+        // IHDR begin at position 8 and end at 33 (non-inclusive)
+        // This means that IHDR's data begins at 16 and ends at 29 (non-inclusive)
+        let mut buf = [0u8; 4];
+        buf.clone_from_slice(&self.bytes[16..20]);
+        let width = u32::from_be_bytes(buf);
+        buf.clone_from_slice(&self.bytes[20..24]);
+        let height = u32::from_be_bytes(buf);
+        ImageMetadata {
+            width,
+            height,
+            bit_depth: self.bytes[24].clone(),
+            color_type: self.bytes[25].clone(),
+            compression_method: self.bytes[26].clone(),
+            filter_method: self.bytes[27].clone(),
+            interlace_method: self.bytes[28].clone()
+        }
     }
 }
 
 /// IHDR, IDAT, and IEND are the only supported chunk types. These represent the mandatory types,
 /// the rest are optional. The first chunk must be an IHDR, there must be at least one IDAT, and
 /// the final chunk must be an IEND.
+#[derive(Debug, PartialEq)]
 pub enum ChunkType {
     IHDR,
     IDAT,

@@ -9,8 +9,19 @@ use decode_error::DecodeError::*;
 mod chunk;
 use chunk::{Chunk, ChunkReader};
 
+pub struct ImageMetadata {
+    width: u32,
+    height: u32,
+    bit_depth: u8,
+    color_type: u8,
+    compression_method: u8,
+    filter_method: u8,
+    interlace_method: u8
+}
+
 pub struct PNG {
-    chunks: Vec<Chunk>
+    chunks: Vec<Chunk>,
+    metadata: ImageMetadata
 }
 
 impl PNG {
@@ -29,7 +40,8 @@ impl PNG {
                 let mut reader = ChunkReader::new(file_contents)?;
                 let mut chunks: Vec<Chunk> = Vec::new();
                 reader.read_into_vec(&mut chunks)?;
-                Ok(Self {chunks})
+                let metadata = reader.read_metadata();
+                Ok(Self {chunks, metadata})
             }
             Err(_e) => Err(FailedToOpenFile(fp.to_owned()))
         }
@@ -37,5 +49,6 @@ impl PNG {
 
     pub fn show(&self) {
         println!("PNG contains {0} chunk(s)", self.chunks.len());
+        println!("Resolution is {0}x{1}", self.metadata.width, self.metadata.height);
     }
 }
