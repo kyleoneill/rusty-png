@@ -257,20 +257,8 @@ impl PNG {
 
     fn create_bitmap(&mut self) -> Result<HBITMAP, DecodeError> {
         let render_data = self.get_decoded_chunk_data()?;
-        // let mut image_data = vec![128u8; 256 * 256 * 4];
-        // for x in 0..256 {
-        //     for y in 0..256 {
-        //         let index = x + y * 256;
-        //         // B
-        //         image_data[index * number_of_channels as usize + 0] = x as u8;
-        //         // G
-        //         image_data[index * number_of_channels as usize + 1] = y as u8;
-        //         // R
-        //         image_data[index * number_of_channels as usize + 2] = 128;
-        //         // A
-        //         image_data[index * number_of_channels as usize + 3] = 255;
-        //     }
-        // }
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-createbitmap
         unsafe {
             // nbitcount is 8 * 4 rather than 8 * number_of_channels because we always decode back to
             // BGRA, even if the PNG is just B/W or RGB
