@@ -87,7 +87,13 @@ impl ChunkReader {
         buf.clone_from_slice(&self.bytes[20..24]);
         let height = u32::from_be_bytes(buf);
         // TODO: Support interlacing: http://www.libpng.org/pub/png/spec/1.2/PNG-DataRep.html#DR.Interlaced-data-order
-        if self.bytes[28] != 0 {
+        let compression_method = self.bytes[26].clone();
+        let filter_method = self.bytes[27].clone();
+        let interlace_method = self.bytes[28].clone();
+        if filter_method != 0 || compression_method != 0 {
+            return Err(UnsupportedFeature("Filter and compression methods only support 0 for each".to_owned()));
+        }
+        if interlace_method != 0 {
             return Err(UnsupportedFeature("Interlacing is not yet supported".to_owned()));
         }
         Ok(ImageMetadata {
@@ -95,9 +101,9 @@ impl ChunkReader {
             height,
             bit_depth: self.bytes[24].clone(),
             color_type: self.bytes[25].clone(),
-            compression_method: self.bytes[26].clone(),
-            filter_method: self.bytes[27].clone(),
-            interlace_method: self.bytes[28].clone()
+            compression_method,
+            filter_method,
+            interlace_method
         })
     }
 }

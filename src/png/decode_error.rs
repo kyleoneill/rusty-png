@@ -19,5 +19,7 @@ pub enum DecodeError {
     #[error("Failed to decode PNG data")]
     FailedDecoding(),
     #[error("The PNG header is invalid, it should be 25 bytes long and have the chunk type of 'IHDR'")]
-    InvalidHeader()
+    InvalidHeader(),
+    #[error("Valid scanline filter values range from 0 to 4 (inclusive), got a value outside of that range")]
+    InvalidScanlineFilter()
 }

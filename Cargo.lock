@@ -254,6 +254,7 @@ dependencies = [
  "crc32fast",
  "inflate",
  "thiserror",
+ "windows-sys 0.42.0",
  "winit",
 ]
 

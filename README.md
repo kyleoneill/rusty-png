@@ -53,6 +53,18 @@ is represented by a single stream stored in all the `IDAT`s. This means that the
 `IDAT` data must be consolidated before being decoded. Other chunks are decoded
 on a per-chunk basis, like `iTXt`, `zTXt`, or `iCCP`.
 
+#### Filtering
+After decompressing, the bytes need to be filtered. The decompressed data follows
+the byte format of:
+
+`BEGIN SCANLINE: FILTER RED GREEN BLUE ALPHA RED GREEN BLUE ALPHA ...`
+
+Each scanline begins with a filter byte with currently defined values ranging
+between 0 and 4 (inclusive).
+
+The operation needed for each filter type is described on [Wikipedia](https://en.wikipedia.org/wiki/Portable_Network_Graphics#Filtering)
+and on the [PNG specs](http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html).
+
 ## Definitions
 Bit Depth: How many bits are in each channel.
 
@@ -62,12 +74,12 @@ The number of channels in a PNG depends on the color_type header field.
 ## Color type and bit depth
 The byte size of the decompressed data stream is going to be equal to:
 
-`(height * width) * (bit_depth / 8) * color_type_mapping`
+`(height * width) * (bit_depth / 8) * channels_per_pixel`
 
-`color_type_mapping` here is going to map to the `color_type`/`bit_depth` table defined
-in the PNG spec. See below for the table. For example, a color type of `6` means
-that there are `4` channels/pixel (each pixel is an RGB triple followed by
-an alpha sample). In units, the above is equivalent to
+`channels_per_pixel` here is going to map to the `color_type`/`bit_depth` table defined
+in the PNG spec. See below for the table. For example, a color type of `6` with a
+bit depth of 8 means that there are `4` channels/pixel (each pixel is an RGB
+triple followed by an alpha sample). In units, the above is equivalent to
 
 `pixels * ((bits / channel) / (bits / byte)) * (channels / pixel)`
 
