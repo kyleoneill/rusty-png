@@ -4,7 +4,7 @@ use std::io::Read;
 use std::fmt;
 use std::fmt::Formatter;
 
-use inflate::inflate_bytes_zlib;
+use miniz_oxide::inflate::decompress_to_vec_zlib;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -39,6 +39,66 @@ pub struct ImageMetadata {
     compression_method: u8,
     filter_method: u8,
     interlace_method: u8
+}
+
+struct LastPixel {
+    a: [u8; 4],
+    b: [u8; 4],
+    c: [u8; 4],
+    d: [u8; 4]
+}
+
+impl LastPixel {
+    fn new() -> Self {
+        Self {
+            a: [0u8; 4],
+            b: [0u8; 4],
+            c: [0u8; 4],
+            d: [0u8; 4],
+        }
+    }
+
+    fn from_decoded(decoded_bytes: &[u8], x: usize, y: usize, width: u32) -> Self {
+        fn get_pixel(decoded_bytes: &[u8], x: isize, y: isize, width: isize) -> [u8; 4] {
+            if x < 0 || y < 0 {
+                return [0u8; 4];
+            }
+            // pixel_index = pixels from current line + all pixels on each line before us
+            let pixel_index = (x + (y * width)) as usize;
+            // byte_index = pixel_index * 4, each pixel is 4 bytes (BGRA) in our decoded output to Windows
+            let byte_index = pixel_index * 4;
+            let mut buf = [0u8; 4];
+            buf.clone_from_slice(&decoded_bytes[byte_index..byte_index + 4]);
+            buf
+        }
+        let x = x as isize;
+        let y = y as isize;
+        let width = width as isize;
+        let a = get_pixel(decoded_bytes, x - 1, y, width);
+        let b = get_pixel(decoded_bytes, x, y - 1, width);
+        let c = get_pixel(decoded_bytes, x - 1, y - 1, width);
+        let d = get_pixel(decoded_bytes, x + 1, y - 1, width);
+        Self { a, b, c, d}
+    }
+
+    fn paeth(&self, i: usize) -> u8 {
+        let a = self.a[i] as i16;
+        let b = self.b[i] as i16;
+        let c = self.c[i] as i16;
+        let p = a + b - c;
+        let p_a = (p - a).abs();
+        let p_b = (p - b).abs();
+        let p_c = (p - c).abs();
+        if p_a <= p_b && p_a <= p_c {
+            a as u8
+        }
+        else if p_b <= p_c  {
+            b as u8
+        }
+        else {
+            c as u8
+        }
+    }
 }
 
 pub struct PNG {
@@ -91,38 +151,47 @@ impl PNG {
             // This gets the current scanline as a slice. It runs from the start of the current
             // y to its end
             let scanline: &[u8] = &unfiltered[y * scanline_width..(y + 1) * scanline_width];
+            let mut last_pixel = LastPixel::new();
             for x in 0..self.metadata.width as usize {
+                last_pixel = LastPixel::from_decoded(&finalized_data, x, y, self.metadata.width);
+
                 // We need to index on scanline[x+1..x+1+bytes_per_pixel] because we need to
                 // account for the filter byte at the start of each scanline
                 let pixel: &[u8] = &scanline[x * bytes_per_pixel + 1..x * bytes_per_pixel + 1 + bytes_per_pixel];
-                let red = pixel[0];
-                let green = pixel[1];
-                let blue = pixel[2];
-                let alpha = pixel[3];
-                // TODO: Implement filtering
-                match scanline[0] {
-                    0 => {
 
-                    },
-                    1 => {
+                // TODO: I am not handling all combinations of what the pixels can be here
+                // Ex, for color_type 6 there are 4 pixels in the unfiltered_data but for
+                // color_type 2 there are only 3. I need to still handle 1, 2, and palette
 
-                    },
-                    2 => {
-
-                    },
-                    3 => {
-
-                    },
-                    4 => {
-
-                    },
-                    _ => return Err(InvalidScanlineFilter())
+                // We want to swap from RGBA to BGRA, thanks Windows
+                let mut bgra = [pixel[2], pixel[1], pixel[0], 255];
+                match self.metadata.color_type {
+                    6 => bgra[3] = pixel[3],
+                    _ => ()
+                };
+                for i in 0..4 {
+                    bgra[i] = match scanline[0] {
+                        0 => {
+                            bgra[i]
+                        },
+                        1 => {
+                            bgra[i].wrapping_add(last_pixel.a[i])
+                        },
+                        2 => {
+                            bgra[i].wrapping_add(last_pixel.b[i])
+                        },
+                        3 => {
+                            bgra[i].wrapping_add(((last_pixel.a[i] as u16 + last_pixel.b[i] as u16) / 2) as u8)
+                        },
+                        4 => {
+                            bgra[i].wrapping_add(last_pixel.paeth(i))
+                        },
+                        _ => return Err(InvalidScanlineFilter())
+                    }
                 }
-                // We want to swap from RBGA to BGRA, thanks Windows
-                finalized_data.push(blue);
-                finalized_data.push(green);
-                finalized_data.push(red);
-                finalized_data.push(alpha);
+                for i in bgra {
+                    finalized_data.push(i);
+                }
             }
         }
         Ok(finalized_data)
@@ -139,13 +208,15 @@ impl PNG {
         // the uncompressed once) if we copy chunk.chunk_data or empties all chunk chunk_data fields
         let mut data: Vec<u8> = Vec::new();
         for chunk in &mut self.chunks {
-            data.append(&mut chunk.chunk_data);
+            if chunk.chunk_type == b"IDAT".to_owned() {
+                data.append(&mut chunk.chunk_data);
+            }
+            // TODO: What do I do with non IDAT chunks?
         }
-        // inflate_bytes_zlib_no_checksum(&data[..])
-        let decoded_data = match inflate_bytes_zlib(&data[..]) {
+        let decoded_data = match decompress_to_vec_zlib(&data[..]) {
             Ok(decoded) => decoded,
             Err(e) => {
-                eprintln!("Failed to inflate compressed data with error: {}", e.as_str());
+                eprintln!("Failed to inflate compressed data with error: {}", e);
                 return Err(FailedDecoding());
             }
         };
@@ -187,7 +258,6 @@ impl PNG {
 
     fn create_bitmap(&mut self) -> Result<HBITMAP, DecodeError> {
         let render_data = self.get_decoded_chunk_data()?;
-        let number_of_channels = self.get_number_of_channels()?;
         // let mut image_data = vec![128u8; 256 * 256 * 4];
         // for x in 0..256 {
         //     for y in 0..256 {
@@ -203,7 +273,9 @@ impl PNG {
         //     }
         // }
         unsafe {
-            Ok(CreateBitmap(self.metadata.width as i32, self.metadata.height as i32, 1, 8 * number_of_channels, render_data.as_ptr().cast()))
+            // nbitcount is 8 * 4 rather than 8 * number_of_channels because we always decode back to
+            // BGRA, even if the PNG is just B/W or RGB
+            Ok(CreateBitmap(self.metadata.width as i32, self.metadata.height as i32, 1, 8 * 4, render_data.as_ptr().cast()))
         }
     }
 
