@@ -93,9 +93,43 @@ impl PNG {
         }
     }
 
+    fn get_number_of_channels(&self) -> Result<u32, DecodeError> {
+        match self.metadata.color_type {
+            0 => Ok(1 as u32),
+            2 => {
+                if self.metadata.bit_depth == 8 || self.metadata.bit_depth == 16 {
+                    Ok(3 as u32)
+                }
+                else {
+                    return Err(InvalidStructure())
+                }
+            },
+            4 => {
+                if self.metadata.bit_depth == 8 || self.metadata.bit_depth == 16 {
+                    Ok(2 as u32)
+                }
+                else {
+                    return Err(InvalidStructure())
+                }
+            }
+            6 => {
+                if self.metadata.bit_depth == 8 || self.metadata.bit_depth == 16 {
+                    Ok(4 as u32)
+                }
+                else {
+                    return Err(InvalidStructure())
+                }
+            },
+            _ => return Err(InvalidStructure())
+        }
+    }
+
     pub fn show(&mut self) -> Result<(), DecodeError> {
-        println!("Displaying image with data:\n{:?}", self);
+        eprintln!("Displaying image with data:\n{:?}", self);
         let render_data = self.get_decoded_chunk_data()?;
+        // TODO: Need a match arm for 3 when implementing PLTE
+        let number_of_channels = self.get_number_of_channels()?;
+
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
             .with_title(&self.name)

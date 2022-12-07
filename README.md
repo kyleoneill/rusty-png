@@ -46,3 +46,41 @@ This means that a PNG file must be a minimum of 57 bytes
 #### Optional (ancillary) chunks
 Optional chunks are signified by a lower-case first byte. the `tIME` chunk is
 optional.
+
+#### Decompression
+Data-stream flow depends on the chunk type. For `IDAT`s, the complete image data
+is represented by a single stream stored in all the `IDAT`s. This means that the
+`IDAT` data must be consolidated before being decoded. Other chunks are decoded
+on a per-chunk basis, like `iTXt`, `zTXt`, or `iCCP`.
+
+## Definitions
+Bit Depth: How many bits are in each channel.
+
+Channel: One color dimension. RGB+A (red, green, blue, and alpha) are 4 channels.
+The number of channels in a PNG depends on the color_type header field. 
+
+## Color type and bit depth
+The byte size of the decompressed data stream is going to be equal to:
+
+`(height * width) * (bit_depth / 8) * color_type_mapping`
+
+`color_type_mapping` here is going to map to the `color_type`/`bit_depth` table defined
+in the PNG spec. See below for the table. For example, a color type of `6` means
+that there are `4` channels/pixel (each pixel is an RGB triple followed by
+an alpha sample). In units, the above is equivalent to
+
+`pixels * ((bits / channel) / (bits / byte)) * (channels / pixel)`
+
+Which can be re-written as
+
+`pixels * (byte / channel) * (channel / pixel)`
+
+This then cancels out to be just `bytes`
+
+| Color Type | Allowed Bit Depths | Interpretation                                                | Number of Channels per pixel |
+|------------|--------------------|---------------------------------------------------------------|------------------------------|
+| 0          | 1, 2, 4, 8, 16     | Each pixel is a grayscale sample                              | 1                            |
+| 2          | 8, 16              | Each pixel is an RGB triple                                   | 3                            |
+| 3          | 1, 2, 4, 8         | Each pixel is a palette index; a `PLTE` chunk must appear     | ?                            |
+| 4          | 8, 16              | Each pixel is a grayscale sample, followed by an alpha sample | 2                            |
+| 6          | 8, 16              | Each pixel is an RGB triple, followed by an alpha sample      | 4                            |
