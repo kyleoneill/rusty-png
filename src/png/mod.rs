@@ -159,15 +159,14 @@ impl PNG {
                 // account for the filter byte at the start of each scanline
                 let pixel: &[u8] = &scanline[x * bytes_per_pixel + 1..x * bytes_per_pixel + 1 + bytes_per_pixel];
 
-                // TODO: I am not handling all combinations of what the pixels can be here
-                // Ex, for color_type 6 there are 4 pixels in the unfiltered_data but for
-                // color_type 2 there are only 3. I need to still handle 1, 2, and palette
-
                 // We want to swap from RGBA to BGRA, thanks Windows
-                let mut bgra = [pixel[2], pixel[1], pixel[0], 255];
-                match self.metadata.color_type {
-                    6 => bgra[3] = pixel[3],
-                    _ => ()
+                let mut bgra: [u8; 4] = match self.metadata.color_type {
+                    0 => [pixel[0], pixel[0], pixel[0], 255],
+                    2 => [pixel[2], pixel[1], pixel[0], 255],
+                    3 => return Err(UnsupportedFeature("PLTE chunks are not yet supported".to_owned())),
+                    4 => [pixel[0], pixel[0], pixel[0], pixel[1]],
+                    6 => [pixel[2], pixel[1], pixel[0], pixel[3]],
+                    _ => return Err(FailedDecoding())
                 };
                 for i in 0..4 {
                     bgra[i] = match scanline[0] {
